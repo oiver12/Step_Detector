@@ -19,26 +19,36 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
-#include "../Inc/tasks.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <string.h>
+#include "tasks.h"
+#include "WiFI/es_wifi_io.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+#ifdef __GNUC__
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#define GETCHAR_PROTOTYPE int __io_getchar(void)
+/* With GCC, small printf (option LD Linker->Libraries->Small printf
+ set to 'Yes') calls __io_putchar() */
+#else
+#define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#define GETCHAR_PROTOTYPE int getc(FILE *f)
+#endif /* __GNUC__ */
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define RXBUFFERSIZE 1
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -51,13 +61,15 @@ QSPI_HandleTypeDef hqspi;
 SPI_HandleTypeDef hspi3;
 
 UART_HandleTypeDef huart1;
+
 UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
-
+uint8_t aRxBuffer[RXBUFFERSIZE + 1];
+__IO ITStatus UartReady = RESET;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,7 +85,7 @@ static void MX_USB_OTG_FS_PCD_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
-
+void UART_IRQCallback(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -118,7 +130,7 @@ int main(void)
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  printf("Hello world!!!!!!! \r\n");
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -142,15 +154,18 @@ int main(void)
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-  osThreadDef(myTask, measureTask, osPriorityNormal, 0, 128);
-  osThreadCreate(osThread(myTask), NULL);
-
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  //osThreadDef(measureTask, measureTask, osPriorityNormal, 0, 512);
+  //osThreadCreate(osThread(measureTask), &hi2c2);
+  //osThreadDef(KalmanTask, presKalmanTask, osPriorityNormal, 0, 512);
+  //osThreadCreate(osThread(KalmanTask), &hi2c2);
+  osThreadDef(wifiTask, wifiServerTask, osPriorityNormal, 0, 512);
+  osThreadCreate(osThread(wifiTask), NULL);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
+  printf("Sucessfully started...\r\n");
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
@@ -386,38 +401,85 @@ static void MX_SPI3_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
+ * @brief USART1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_USART1_UART_Init(void) {
 
-  /* USER CODE BEGIN USART1_Init 0 */
+	/* USER CODE BEGIN USART1_Init 0 */
 
-  /* USER CODE END USART1_Init 0 */
+	/* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
+	/* USER CODE BEGIN USART1_Init 1 */
 
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
+	/* TODO: Set the USART1 parameters. */
 
-  /* USER CODE END USART1_Init 2 */
+	/* USER CODE END USART1_Init 1 */
+	huart1.Instance = USART1;
+	huart1.Init.BaudRate = 115200;
+	huart1.Init.WordLength = UART_WORDLENGTH_8B;
+	huart1.Init.StopBits = UART_STOPBITS_1;
+	huart1.Init.Parity = UART_PARITY_NONE;
+	huart1.Init.Mode = UART_MODE_TX_RX;
+	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+	huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+	huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+	if (HAL_UART_Init(&huart1) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN USART1_Init 2 */
 
+	/* TODO: Enable and configure the interrupt for USART1. */
+
+	HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(USART1_IRQn);
+
+	/* USER CODE END USART1_Init 2 */
+
+}
+
+
+PUTCHAR_PROTOTYPE {
+	/* Place your implementation of fputc here */
+	/* e.g. write a character to UART */
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+
+	return ch;
+}
+GETCHAR_PROTOTYPE {
+	/* Place your implementation of getc here */
+	/* e.g. read and then write the same character
+	 * 		to UART again to provide feedback*/
+	int ch = 0;
+	HAL_UART_Receive(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+	return ch;
+}
+
+/**
+ * @brief  Rx Transfer completed callback
+ * @param  UartHandle: UART handle
+ * @note   This example shows a simple way to report end of DMA Rx transfer, and
+ *         you can add your own implementation.
+ * @retval None
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
+	/* Set transmission flag: transfer complete */
+	UartReady = SET;
+
+}
+
+/**
+ * @brief  UART error callbacks
+ * @param  UartHandle: UART handle
+ * @note   This example shows a simple way to report transfer error, and you can
+ *         add your own implementation.
+ * @retval None
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *UartHandle) {
+	Error_Handler();
 }
 
 /**
@@ -738,6 +800,38 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
+/**
+  * @brief  EXTI line detection callback.
+  * @param  GPIO_Pin: Specifies the port pin connected to corresponding EXTI line.
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  switch (GPIO_Pin)
+  {
+    case (GPIO_PIN_1):
+    {
+      SPI_WIFI_ISR();
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+}
+
+/**
+  * @brief  SPI3 line detection callback.
+  * @param  None
+  * @retval None
+  */
+void SPI3_IRQHandler(void)
+{
+  HAL_SPI_IRQHandler(&hspi);
+}
+
+
 
 #ifdef  USE_FULL_ASSERT
 /**
