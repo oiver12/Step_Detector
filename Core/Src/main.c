@@ -25,7 +25,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "tasks.h"
-#include "WiFI/es_wifi_io.h"
+#include "WiFi/es_wifi_io.h"
+#include "WiFi/es_wifi.h"
+#include "WiFi/wifi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +42,14 @@
 #define GETCHAR_PROTOTYPE int getc(FILE *f)
 #endif /* __GNUC__ */
 
+#define SSID     "YOUR_WIFI_SSID"
+#define PASSWORD "YOUR_WIFI_PASSWORD"
+#define PORT           80
+
+#define WIFI_WRITE_TIMEOUT 10000
+#define WIFI_READ_TIMEOUT  10000
+#define SOCKET                 0
+#define LOG(a) printf a
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -49,6 +59,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+static  uint8_t  IP_Addr[4];
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -61,7 +72,6 @@ QSPI_HandleTypeDef hqspi;
 SPI_HandleTypeDef hspi3;
 
 UART_HandleTypeDef huart1;
-
 UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
@@ -86,6 +96,8 @@ void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 void UART_IRQCallback(UART_HandleTypeDef *huart);
+static  int wifi_start(void);
+static  int wifi_connect(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -151,9 +163,19 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
+  /*----------Start WiFi and Server------------*/
+  LOG(("\nRunning HTML Server test\n"));
+  if (wifi_connect()!=0)
+	  return -1;
+
+  if (WIFI_STATUS_OK!=WIFI_StartServer(SOCKET, WIFI_TCP_PROTOCOL, 1, "", PORT))
+  {
+    LOG(("ERROR: Cannot start server.\n"));
+  }
+
+  /*-------- start Tasks ----------*/
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
-
 
   /* USER CODE BEGIN RTOS_THREADS */
   //osThreadDef(measureTask, measureTask, osPriorityNormal, 0, 512);
@@ -161,11 +183,10 @@ int main(void)
   //osThreadDef(KalmanTask, presKalmanTask, osPriorityNormal, 0, 512);
   //osThreadCreate(osThread(KalmanTask), &hi2c2);
   osThreadDef(wifiTask, wifiServerTask, osPriorityNormal, 0, 512);
-  osThreadCreate(osThread(wifiTask), NULL);
+  osThreadCreate(osThread(wifiTask), IP_Addr);
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
-  printf("Sucessfully started...\r\n");
   osKernelStart();
 
   /* We should never get here as control is now taken by the scheduler */
@@ -379,11 +400,11 @@ static void MX_SPI3_Init(void)
   hspi3.Instance = SPI3;
   hspi3.Init.Mode = SPI_MODE_MASTER;
   hspi3.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi3.Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi3.Init.DataSize = SPI_DATASIZE_16BIT;
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -401,85 +422,45 @@ static void MX_SPI3_Init(void)
 }
 
 /**
- * @brief USART1 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_USART1_UART_Init(void) {
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
 
-	/* USER CODE BEGIN USART1_Init 0 */
+  /* USER CODE BEGIN USART1_Init 0 */
 
-	/* USER CODE END USART1_Init 0 */
+  /* USER CODE END USART1_Init 0 */
 
-	/* USER CODE BEGIN USART1_Init 1 */
+  /* USER CODE BEGIN USART1_Init 1 */
 
 	/* TODO: Set the USART1 parameters. */
 
-	/* USER CODE END USART1_Init 1 */
-	huart1.Instance = USART1;
-	huart1.Init.BaudRate = 115200;
-	huart1.Init.WordLength = UART_WORDLENGTH_8B;
-	huart1.Init.StopBits = UART_STOPBITS_1;
-	huart1.Init.Parity = UART_PARITY_NONE;
-	huart1.Init.Mode = UART_MODE_TX_RX;
-	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-	huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-	huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-	if (HAL_UART_Init(&huart1) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN USART1_Init 2 */
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
 
 	/* TODO: Enable and configure the interrupt for USART1. */
 
 	HAL_NVIC_SetPriority(USART1_IRQn, 0, 0);
 	HAL_NVIC_EnableIRQ(USART1_IRQn);
 
-	/* USER CODE END USART1_Init 2 */
+  /* USER CODE END USART1_Init 2 */
 
-}
-
-
-PUTCHAR_PROTOTYPE {
-	/* Place your implementation of fputc here */
-	/* e.g. write a character to UART */
-	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
-
-	return ch;
-}
-GETCHAR_PROTOTYPE {
-	/* Place your implementation of getc here */
-	/* e.g. read and then write the same character
-	 * 		to UART again to provide feedback*/
-	int ch = 0;
-	HAL_UART_Receive(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
-	return ch;
-}
-
-/**
- * @brief  Rx Transfer completed callback
- * @param  UartHandle: UART handle
- * @note   This example shows a simple way to report end of DMA Rx transfer, and
- *         you can add your own implementation.
- * @retval None
- */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
-	/* Set transmission flag: transfer complete */
-	UartReady = SET;
-
-}
-
-/**
- * @brief  UART error callbacks
- * @param  UartHandle: UART handle
- * @note   This example shows a simple way to report transfer error, and you can
- *         add your own implementation.
- * @retval None
- */
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *UartHandle) {
-	Error_Handler();
 }
 
 /**
@@ -733,6 +714,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
@@ -745,6 +729,134 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+SPI_HandleTypeDef* GetSPI3()
+{
+	return &hspi3;
+}
+
+PUTCHAR_PROTOTYPE {
+	/* Place your implementation of fputc here */
+	/* e.g. write a character to UART */
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+
+	return ch;
+}
+GETCHAR_PROTOTYPE {
+	/* Place your implementation of getc here */
+	/* e.g. read and then write the same character
+	 * 		to UART again to provide feedback*/
+	int ch = 0;
+	HAL_UART_Receive(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart1, (uint8_t*) &ch, 1, HAL_MAX_DELAY);
+	return ch;
+}
+
+/**
+ * @brief  Rx Transfer completed callback
+ * @param  UartHandle: UART handle
+ * @note   This example shows a simple way to report end of DMA Rx transfer, and
+ *         you can add your own implementation.
+ * @retval None
+ */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
+	/* Set transmission flag: transfer complete */
+	UartReady = SET;
+
+}
+
+static int wifi_start(void)
+{
+  uint8_t  MAC_Addr[6];
+
+ /*Initialize and use WIFI module */
+  if(WIFI_Init() ==  WIFI_STATUS_OK)
+  {
+    LOG(("ES-WIFI Initialized.\n"));
+    if(WIFI_GetMAC_Address(MAC_Addr, sizeof(MAC_Addr)) == WIFI_STATUS_OK)
+    {
+      LOG(("> eS-WiFi module MAC Address : %02X:%02X:%02X:%02X:%02X:%02X\n",
+               MAC_Addr[0],
+               MAC_Addr[1],
+               MAC_Addr[2],
+               MAC_Addr[3],
+               MAC_Addr[4],
+               MAC_Addr[5]));
+    }
+    else
+    {
+      LOG(("> ERROR : CANNOT get MAC address\n"));
+      return -1;
+    }
+  }
+  else
+  {
+    return -1;
+  }
+  return 0;
+}
+
+
+
+int wifi_connect(void)
+{
+
+  wifi_start();
+
+  /* Passwords must never be logged. */
+  if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
+  {
+    if(WIFI_GetIP_Address(IP_Addr, sizeof(IP_Addr)) == WIFI_STATUS_OK)
+    {
+      LOG(("> es-wifi module connected: got IP Address : %d.%d.%d.%d\n",
+               IP_Addr[0],
+               IP_Addr[1],
+               IP_Addr[2],
+               IP_Addr[3]));
+    }
+    else
+    {
+		  LOG((" ERROR : es-wifi module CANNOT get IP address\n"));
+      return -1;
+    }
+  }
+  else
+  {
+		 LOG(("ERROR : es-wifi module NOT connected\n"));
+     return -1;
+  }
+  return 0;
+}
+
+/**
+  * @brief  EXTI line detection callback.
+  * @param  GPIO_Pin: Specifies the port pin connected to corresponding EXTI line.
+  * @retval None
+  */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  switch (GPIO_Pin)
+  {
+    case (GPIO_PIN_1):
+    {
+      SPI_WIFI_ISR();
+      break;
+    }
+    default:
+    {
+      break;
+    }
+  }
+}
+/**
+ * @brief  UART error callbacks
+ * @param  UartHandle: UART handle
+ * @note   This example shows a simple way to report transfer error, and you can
+ *         add your own implementation.
+ * @retval None
+ */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *UartHandle) {
+	Error_Handler();
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -800,38 +912,6 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-/**
-  * @brief  EXTI line detection callback.
-  * @param  GPIO_Pin: Specifies the port pin connected to corresponding EXTI line.
-  * @retval None
-  */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  switch (GPIO_Pin)
-  {
-    case (GPIO_PIN_1):
-    {
-      SPI_WIFI_ISR();
-      break;
-    }
-    default:
-    {
-      break;
-    }
-  }
-}
-
-/**
-  * @brief  SPI3 line detection callback.
-  * @param  None
-  * @retval None
-  */
-void SPI3_IRQHandler(void)
-{
-  HAL_SPI_IRQHandler(&hspi);
-}
-
-
 
 #ifdef  USE_FULL_ASSERT
 /**

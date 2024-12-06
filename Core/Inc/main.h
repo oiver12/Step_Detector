@@ -29,8 +29,6 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32l4xx_hal.h"
 
-extern  SPI_HandleTypeDef hspi;
-void SPI3_IRQHandler(void);
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -224,8 +222,10 @@ void Error_Handler(void);
 #define ISM43362_SPI3_CSN_GPIO_Port GPIOE
 #define ISM43362_DRDY_EXTI1_Pin GPIO_PIN_1
 #define ISM43362_DRDY_EXTI1_GPIO_Port GPIOE
+#define ISM43362_DRDY_EXTI1_EXTI_IRQn EXTI1_IRQn
 
 /* USER CODE BEGIN Private defines */
+SPI_HandleTypeDef* GetSPI3();
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

@@ -14,19 +14,11 @@
 #include "WiFi/es_wifi.h"
 #include "WiFi/wifi.h"
 
-
-#define SSID     "YOUR_WIFI_SSID"
-#define PASSWORD "YOUR_WIFI_PASSWORD"
-#define PORT           80
-
-#define WIFI_WRITE_TIMEOUT 10000
-#define WIFI_READ_TIMEOUT  10000
-#define SOCKET                 0
-#define LOG(a) printf a
-
 #define R_SPECIFIC 287.053
 #define GRAVITY_G 9.80665
 #define TEMPGRAD_L 0.0065
+
+#define SOCKET                 0
 
 static  uint8_t http[1024];
 static  uint8_t  IP_Addr[4];
@@ -34,6 +26,9 @@ static  int     LedState = 0;
 
 float lps22hb_stnd_height = 0.1298;    // Standardabweichung Höhenmessung
 float lsm66dsl_stnd_acc = 0.2;          // Standardabweichung Beschleunigungssensor
+
+static  bool WebServerProcess(void);
+static  WIFI_Status_t SendWebPage(uint8_t ledIsOn, uint8_t temperature);
 
 typedef struct {
 	I2C_HandleTypeDef *hi2c;
@@ -44,9 +39,6 @@ SemaphoreHandle_t i2c_mutex;
 QueueHandle_t accQueue;
 
 static  WIFI_Status_t SendWebPage(uint8_t ledIsOn, uint8_t temperature);
-static  int wifi_server(void);
-static  int wifi_start(void);
-static  int wifi_connect(void);
 static  bool WebServerProcess(void);
 
 int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, uint16_t len) {
@@ -334,232 +326,9 @@ void saveTask(void *arguments)
 
 void wifiServerTask(void *arguments)
 {
-  bool StopServer = false;
-
-  LOG(("\nRunning HTML Server test\n"));
-  if (wifi_connect()!=0) return -1;
-
-
-  if (WIFI_STATUS_OK!=WIFI_StartServer(SOCKET, WIFI_TCP_PROTOCOL, 1, "", PORT))
-  {
-    LOG(("ERROR: Cannot start server.\n"));
-  }
-
-  LOG(("Server is running and waiting for an HTTP  Client connection to %d.%d.%d.%d\n",IP_Addr[0],IP_Addr[1],IP_Addr[2],IP_Addr[3]));
-
-  do
-  {
-    uint8_t RemoteIP[4];
-    uint16_t RemotePort;
-
-
-    while (WIFI_STATUS_OK != WIFI_WaitServerConnection(SOCKET,1000,RemoteIP,sizeof(RemoteIP), &RemotePort))
-    {
-        LOG(("Waiting connection to  %d.%d.%d.%d\n",IP_Addr[0],IP_Addr[1],IP_Addr[2],IP_Addr[3]));
-
-    }
-
-    LOG(("Client connected %d.%d.%d.%d:%d\n",RemoteIP[0],RemoteIP[1],RemoteIP[2],RemoteIP[3],RemotePort));
-
-    StopServer=WebServerProcess();
-
-    if(WIFI_CloseServerConnection(SOCKET) != WIFI_STATUS_OK)
-    {
-      LOG(("ERROR: failed to close current Server connection\n"));
-      return -1;
-    }
-  }
-  while(StopServer == false);
-
-  if (WIFI_STATUS_OK!=WIFI_StopServer(SOCKET))
-  {
-    LOG(("ERROR: Cannot stop server.\n"));
-  }
-
-  LOG(("Server is stop\n"));
-  return 0;
+	uint8_t (*IP_Addr)[4] = (uint8_t (*)[4])arguments;
+	printf("Server is running and waiting for an HTTP  Client connection to %d.%d.%d.%d\n",IP_Addr[0],IP_Addr[1],IP_Addr[2],IP_Addr[3]);
+	vTaskDelete(NULL);
 }
 
-static int wifi_start(void)
-{
-  uint8_t  MAC_Addr[6];
-
- /*Initialize and use WIFI module */
-  if(WIFI_Init() ==  WIFI_STATUS_OK)
-  {
-    LOG(("ES-WIFI Initialized.\n"));
-    if(WIFI_GetMAC_Address(MAC_Addr, sizeof(MAC_Addr)) == WIFI_STATUS_OK)
-    {
-      LOG(("> eS-WiFi module MAC Address : %02X:%02X:%02X:%02X:%02X:%02X\n",
-               MAC_Addr[0],
-               MAC_Addr[1],
-               MAC_Addr[2],
-               MAC_Addr[3],
-               MAC_Addr[4],
-               MAC_Addr[5]));
-    }
-    else
-    {
-      LOG(("> ERROR : CANNOT get MAC address\n"));
-      return -1;
-    }
-  }
-  else
-  {
-    return -1;
-  }
-  return 0;
-}
-
-
-
-int wifi_connect(void)
-{
-
-  wifi_start();
-
-  /* Passwords must never be logged. */
-  if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
-  {
-    if(WIFI_GetIP_Address(IP_Addr, sizeof(IP_Addr)) == WIFI_STATUS_OK)
-    {
-      LOG(("> es-wifi module connected: got IP Address : %d.%d.%d.%d\n",
-               IP_Addr[0],
-               IP_Addr[1],
-               IP_Addr[2],
-               IP_Addr[3]));
-    }
-    else
-    {
-		  LOG((" ERROR : es-wifi module CANNOT get IP address\n"));
-      return -1;
-    }
-  }
-  else
-  {
-		 LOG(("ERROR : es-wifi module NOT connected\n"));
-     return -1;
-  }
-  return 0;
-}
-
-static bool WebServerProcess(void)
-{
-  uint8_t temp;
-  uint16_t  respLen;
-  static   uint8_t resp[1024];
-  bool    stopserver=false;
-
-  if (WIFI_STATUS_OK == WIFI_ReceiveData(SOCKET, resp, 1000, &respLen, WIFI_READ_TIMEOUT))
-  {
-   LOG(("get %d byte from server\n",respLen));
-
-   if( respLen > 0)
-   {
-      if(strstr((char *)resp, "GET")) /* GET: put web page */
-      {
-        //temp = (int) BSP_TSENSOR_ReadTemp();
-        if(SendWebPage(LedState, temp) != WIFI_STATUS_OK)
-        {
-          LOG(("> ERROR : Cannot send web page\n"));
-        }
-        else
-        {
-          LOG(("Send page after  GET command\n"));
-        }
-       }
-       else if(strstr((char *)resp, "POST"))/* POST: received info */
-       {
-         LOG(("Post request\n"));
-
-         if(strstr((char *)resp, "radio"))
-         {
-           if(strstr((char *)resp, "radio=0"))
-           {
-             LedState = 0;
-             //BSP_LED_Off(LED2);
-           }
-           else if(strstr((char *)resp, "radio=1"))
-           {
-             LedState = 1;
-             //BSP_LED_On(LED2);
-           }
-           //temp = (int) BSP_TSENSOR_ReadTemp();
-         }
-         if(strstr((char *)resp, "stop_server"))
-         {
-           if(strstr((char *)resp, "stop_server=0"))
-           {
-             stopserver = false;
-           }
-           else if(strstr((char *)resp, "stop_server=1"))
-           {
-             stopserver = true;
-           }
-         }
-         //temp = (int) BSP_TSENSOR_ReadTemp();
-         if(SendWebPage(LedState, temp) != WIFI_STATUS_OK)
-         {
-           LOG(("> ERROR : Cannot send web page\n"));
-         }
-         else
-         {
-           LOG(("Send Page after POST command\n"));
-         }
-       }
-     }
-  }
-  else
-  {
-    LOG(("Client close connection\n"));
-  }
-  return stopserver;
-
- }
-
-/**
-  * @brief  Send HTML page
-  * @param  None
-  * @retval None
-  */
-static WIFI_Status_t SendWebPage(uint8_t ledIsOn, uint8_t temperature)
-{
-  uint8_t  temp[50];
-  uint16_t SentDataLength;
-  WIFI_Status_t ret;
-
-  /* construct web page content */
-  strcpy((char *)http, (char *)"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\nPragma: no-cache\r\n\r\n");
-  strcat((char *)http, (char *)"<html>\r\n<body>\r\n");
-  strcat((char *)http, (char *)"<title>STM32 Web Server</title>\r\n");
-  strcat((char *)http, (char *)"<h2>InventekSys : Web Server using Es-Wifi with STM32</h2>\r\n");
-  strcat((char *)http, (char *)"<br /><hr>\r\n");
-  strcat((char *)http, (char *)"<p><form method=\"POST\"><strong>Temp: <input type=\"text\" value=\"");
-  sprintf((char *)temp, "%d", temperature);
-  strcat((char *)http, (char *)temp);
-  strcat((char *)http, (char *)"\"> <sup>O</sup>C");
-
-  if (ledIsOn)
-  {
-    strcat((char *)http, (char *)"<p><input type=\"radio\" name=\"radio\" value=\"0\" >LED off");
-    strcat((char *)http, (char *)"<br><input type=\"radio\" name=\"radio\" value=\"1\" checked>LED on");
-  }
-  else
-  {
-    strcat((char *)http, (char *)"<p><input type=\"radio\" name=\"radio\" value=\"0\" checked>LED off");
-    strcat((char *)http, (char *)"<br><input type=\"radio\" name=\"radio\" value=\"1\" >LED on");
-  }
-
-  strcat((char *)http, (char *)"</strong><p><input type=\"submit\"></form></span>");
-  strcat((char *)http, (char *)"</body>\r\n</html>\r\n");
-
-  ret = WIFI_SendData(0, (uint8_t *)http, strlen((char *)http), &SentDataLength, WIFI_WRITE_TIMEOUT);
-
-  if((ret == WIFI_STATUS_OK) && (SentDataLength != strlen((char *)http)))
-  {
-    ret = WIFI_STATUS_ERROR;
-  }
-
-  return ret;
-}
 

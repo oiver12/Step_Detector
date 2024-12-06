@@ -44,7 +44,7 @@ extern osMutexId es_wifi_mutex;
 #define LOCK_SPI()
 #define UNLOCK_SPI()
 #define SEM_SIGNAL(a)
-#define SPI_INTERFACE_PRIO              0
+#define SPI_INTERFACE_PRIO              5
 #endif
 
 #define ES_WIFI_MAX_SSID_NAME_SIZE                  32

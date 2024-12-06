@@ -25,13 +25,15 @@
 #include "WiFi/es_wifi_conf.h"
 #include <core_cm4.h>
 #include "cmsis_os.h"
+#include <stdio.h>
+#include "main.h"
 
 /* Private define ------------------------------------------------------------*/
 #define MIN(a, b)  ((a) < (b) ? (a) : (b))
 /* Private typedef -----------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-SPI_HandleTypeDef hspi;
+SPI_HandleTypeDef* hspi;
 static  int volatile spi_rx_event = 0;
 static  int volatile spi_tx_event = 0;
 static  int volatile cmddata_rdy_rising_event = 0;
@@ -148,26 +150,28 @@ int8_t SPI_WIFI_Init(uint16_t mode)
 
   if (mode == ES_WIFI_INIT)
   {
-    hspi.Instance               = SPI3;
-    SPI_WIFI_MspInit(&hspi);
 
-    hspi.Init.Mode              = SPI_MODE_MASTER;
-    hspi.Init.Direction         = SPI_DIRECTION_2LINES;
-    hspi.Init.DataSize          = SPI_DATASIZE_16BIT;
-    hspi.Init.CLKPolarity       = SPI_POLARITY_LOW;
-    hspi.Init.CLKPhase          = SPI_PHASE_1EDGE;
-    hspi.Init.NSS               = SPI_NSS_SOFT;
-    hspi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* 80/8= 10MHz (Inventek WIFI module supports up to 20MHz)*/
-    hspi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-    hspi.Init.TIMode            = SPI_TIMODE_DISABLE;
-    hspi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
-    hspi.Init.CRCPolynomial     = 0;
+    //hspi.Instance               = SPI3;
+    //SPI_WIFI_MspInit(&hspi);
 
-    if(HAL_SPI_Init( &hspi ) != HAL_OK)
-    {
-      return -1;
-    }
+//    hspi.Init.Mode              = SPI_MODE_MASTER;
+//    hspi.Init.Direction         = SPI_DIRECTION_2LINES;
+//    hspi.Init.DataSize          = SPI_DATASIZE_16BIT;
+//    hspi.Init.CLKPolarity       = SPI_POLARITY_LOW;
+//    hspi.Init.CLKPhase          = SPI_PHASE_1EDGE;
+//    hspi.Init.NSS               = SPI_NSS_SOFT;
+//    hspi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8; /* 80/8= 10MHz (Inventek WIFI module supports up to 20MHz)*/
+//    hspi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+//    hspi.Init.TIMode            = SPI_TIMODE_DISABLE;
+//    hspi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLE;
+//    hspi.Init.CRCPolynomial     = 0;
 
+//    if(HAL_SPI_Init( &hspi ) != HAL_OK)
+//    {
+//      return -1;
+//    }
+	  hspi = GetSPI3();
+	  printf("Init es_wifi_io\r\n");
      /* Enable Interrupt for Data Ready pin , GPIO_PIN1 */
      HAL_NVIC_SetPriority((IRQn_Type)EXTI1_IRQn, SPI_INTERFACE_PRIO, 0x00);
      HAL_NVIC_EnableIRQ((IRQn_Type)EXTI1_IRQn);
@@ -216,7 +220,7 @@ int8_t SPI_WIFI_ResetModule(void)
       WIFI_DISABLE_NSS();
       return -1;
     }
-    Status = HAL_SPI_Receive(&hspi , &Prompt[count], 1, 0xFFFF);
+    Status = HAL_SPI_Receive(hspi , &Prompt[count], 1, 0xFFFF);
     count += 2;
     if (((HAL_GetTick() - tickstart) > 0xFFFF) || (Status != HAL_OK))
     {
@@ -242,7 +246,7 @@ int8_t SPI_WIFI_ResetModule(void)
   */
 int8_t SPI_WIFI_DeInit(void)
 {
-  HAL_SPI_DeInit( &hspi );
+  HAL_SPI_DeInit(hspi );
 #ifdef WIFI_USE_CMSIS_OS
   osMutexDelete(spi_mutex);
   osMutexDelete(es_wifi_mutex);
@@ -352,7 +356,7 @@ int16_t SPI_WIFI_ReceiveData(uint8_t *pData, uint16_t len, uint32_t timeout)
     if ((length < len) || (!len))
     {
       spi_rx_event = 1;
-      if (HAL_SPI_Receive_IT(&hspi, tmp, 1) != HAL_OK) {
+      if (HAL_SPI_Receive_IT(hspi, tmp, 1) != HAL_OK) {
         WIFI_DISABLE_NSS();
         UNLOCK_SPI();
         return ES_WIFI_ERROR_SPI_FAILED;
@@ -407,7 +411,7 @@ int16_t SPI_WIFI_SendData(const uint8_t *pdata, uint16_t len, uint32_t timeout)
   if (len > 1)
   {
     spi_tx_event = 1;
-    if (HAL_SPI_Transmit_IT(&hspi, (uint8_t *)pdata , len / 2) != HAL_OK)
+    if (HAL_SPI_Transmit_IT(hspi, (uint8_t *)pdata , len / 2) != HAL_OK)
     {
       WIFI_DISABLE_NSS();
       UNLOCK_SPI();
@@ -422,7 +426,7 @@ int16_t SPI_WIFI_SendData(const uint8_t *pdata, uint16_t len, uint32_t timeout)
     Padding[1] = '\n';
 
     spi_tx_event=1;
-    if (HAL_SPI_Transmit_IT(&hspi, Padding, 1) != HAL_OK)
+    if (HAL_SPI_Transmit_IT(hspi, Padding, 1) != HAL_OK)
     {
       WIFI_DISABLE_NSS();
       UNLOCK_SPI();
