@@ -18,14 +18,34 @@
 #define GRAVITY_G 9.80665
 #define TEMPGRAD_L 0.0065
 
-#define SOCKET                 0
+typedef enum {
+	isWaiting,
+	isSaving,
+	isReading
+} state_t;
 
-static  uint8_t http[1024];
-static  uint8_t  IP_Addr[4];
-static  int     LedState = 0;
+typedef struct {
+	float acc;
+	float diffHeight;
+	float kalmanHeight;
+	float kalmanVertVel;
+	float kalmanVertAcc;
+	uint32_t time;
+} measureData_t;
 
+// Constants
+#define BLOCK_SIZE   0x1000  // 4096 bytes
+#define PAGE_SIZE    0x0100  // 256 bytes
+
+// Starting address
+#define START_ADDRESS 0x0000
+// Page buffer
+static uint8_t pageBuffer[PAGE_SIZE];
+
+state_t currentState = isWaiting;
 float lps22hb_stnd_height = 0.1298;    // Standardabweichung Höhenmessung
 float lsm66dsl_stnd_acc = 0.2;          // Standardabweichung Beschleunigungssensor
+bool initMeasr = false;
 
 static  bool WebServerProcess(void);
 static  WIFI_Status_t SendWebPage(uint8_t ledIsOn, uint8_t temperature);
@@ -37,9 +57,7 @@ typedef struct {
 
 SemaphoreHandle_t i2c_mutex;
 QueueHandle_t accQueue;
-
-static  WIFI_Status_t SendWebPage(uint8_t ledIsOn, uint8_t temperature);
-static  bool WebServerProcess(void);
+QueueHandle_t measureQueue;
 
 int32_t platform_write(void *handle, uint8_t reg, const uint8_t *bufp, uint16_t len) {
     I2C_Device *i2c_device = (I2C_Device *)handle;
@@ -80,6 +98,7 @@ int32_t platform_read(void *handle, uint8_t reg, uint8_t *bufp, uint16_t len) {
 }
 
 void measureTask(void *argument) {
+	printf("------Start measure Task----\r\n");
 	stmdev_ctx_t dev_ctx;
 	I2C_HandleTypeDef* i2c_handle = (I2C_HandleTypeDef*)argument;
 
@@ -126,6 +145,10 @@ void measureTask(void *argument) {
 	unsigned int step = 0;
 	QuaternionFilter_init();
 	float rotation[4] = {0, 1, 0, 0};
+	while(currentState != isSaving)
+	{
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
 	uint32_t lastTime = HAL_GetTick();
 	while(1)
 	{
@@ -215,8 +238,9 @@ static void ResetKalman(kalman_t *kf)
 
 void presKalmanTask(void *arguments)
 {
-	printf("Starting Kalmantask \r\n");
+	printf("------Start Kalman Task----\r\n");
 	I2C_HandleTypeDef* i2c_handle = (I2C_HandleTypeDef*)arguments;
+	measureQueue = xQueueCreate(5, sizeof(measureData_t));
 	stmdev_lps22hb_t device = {
 			.hi2c = i2c_handle,
 			.deviceAddr_pres = 0xBBU,
@@ -233,6 +257,10 @@ void presKalmanTask(void *arguments)
 	}
 	xSemaphoreGive(i2c_mutex);
 	printf("Configured LPS22HB\r\n");
+	while(currentState != isSaving)
+	{
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
 	float startPressure = 0.0f;
 	float startTemperature = 0.0f;
 	for (size_t i = 0; i < 10; i++)
@@ -260,6 +288,7 @@ void presKalmanTask(void *arguments)
 	uint32_t lastTime = HAL_GetTick();
 
 	printf("Startpres: %.2f, StartTemp: %.2f\r\n", startPressure, startTemperature);
+	initMeasr = true;
 	while(1)
 	{
 		xSemaphoreTake(i2c_mutex, portMAX_DELAY);
@@ -304,31 +333,224 @@ void presKalmanTask(void *arguments)
 		matrix_set(u, 0, 0, acc - 9.81);
 		kalman_update(&kf);
 		kalman_predict(&kf);
-		//double vertVel = matrix_get(x, 1, 0);
-		//printf("VertVelocity: %.2f \r\n", vertVel);
-		double height = matrix_get(x, 0, 0);
-		//printf("Height: %.2f\r\n", height);
 
+		measureData_t newData = {
+				.acc = acc - 9.81,
+				.diffHeight = heightDifferenz,
+				.kalmanHeight = matrix_get(x, 0, 0),
+				.kalmanVertVel = matrix_get(x, 1, 0),
+				.kalmanVertAcc = matrix_get(x, 2, 0),
+				.time = HAL_GetTick()
+		};
+		if (xQueueSendToBack(measureQueue, &newData, (TickType_t)1) != pdPASS)
+		{
+			printf("Failed to insert data into the queue.\n");
+		}
 		vTaskDelay(pdMS_TO_TICKS(40));
 	}
 }
 
+// Helper to find block start address from any given address
+static inline uint32_t GetBlockStartAddress(uint32_t addr) {
+    return (addr & ~(BLOCK_SIZE - 1));
+}
+
+// Helper to erase a block
+static uint8_t EraseBlock(uint32_t addr) {
+    // Align address to block boundary
+    uint32_t blockAddr = GetBlockStartAddress(addr);
+    uint32_t sectorIndex = blockAddr / BLOCK_SIZE;
+    printf("Erasing Sector at: %lu\n\r", sectorIndex);
+    if(BSP_QSPI_Erase_Sector(sectorIndex) != QSPI_OK)
+    {
+    	return QSPI_ERROR;
+    }
+    while(BSP_QSPI_GetStatus() != QSPI_OK)
+    {
+    	vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    return QSPI_OK;
+}
+
 void saveTask(void *arguments)
 {
+	printf("------Start Save Task----\r\n");
+	while(!initMeasr)
+		vTaskDelay(2);
+
+	measureData_t receivedData;
+	uint32_t currentWriteAddress = START_ADDRESS;
+	uint32_t currentBlockStart   = GetBlockStartAddress(currentWriteAddress);
 	uint8_t errorCode = BSP_QSPI_Init();
 	if(errorCode != QSPI_OK)
 	{
 		printf("Can't init QSPI: 0x%02x \r\n", errorCode);
 		return;
 	}
-	printf("Initialized QSPI\r\n");
+	printf("Init QSPI Flash\r\n");
+	while(currentState != isSaving)
+	{
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
+	printf("--------------Start Saving---------------\r\n");
+	// Erase the first block we start writing into
+	if (EraseBlock(currentBlockStart) != QSPI_OK) {
+		printf("Can't erase block!\r\n");
+		return;
+	}
+
+	uint16_t pageIndex = 0;
+	const size_t recordSize = sizeof(measureData_t) + 2;
+
+	memset(pageBuffer, 0xFF, PAGE_SIZE);
+
+	while (1)
+	{
+		// Wait indefinitely for new data
+		if (xQueueReceive(measureQueue, &receivedData, portMAX_DELAY) == pdPASS) {
+			// Check if we have enough room in the current page for this record
+			if (pageIndex + recordSize > PAGE_SIZE) {
+				// Not enough room in the current page, we need to write this page and move on
+				// First write out the full page
+				if (BSP_QSPI_Write(pageBuffer, currentWriteAddress, PAGE_SIZE) != QSPI_OK) {
+					printf("Can't write to QSPI\r\n");
+				}
+				printf("Saving page\r\n");
+				// Advance to next page
+				currentWriteAddress += PAGE_SIZE;
+
+				// Check if we crossed a block boundary
+				if ((currentWriteAddress & (BLOCK_SIZE - 1)) == 0) {
+					printf("Old Block full!\n\r");
+					// We are exactly at a block boundary
+					currentBlockStart = GetBlockStartAddress(currentWriteAddress);
+					if (EraseBlock(currentBlockStart) != QSPI_OK) {
+						printf("Cant erase next block!\r\n");
+						// Handle block erase error
+					}
+				}
+
+				// Reset page buffer and index
+				memset(pageBuffer, 0xFF, PAGE_SIZE);
+				pageIndex = 0;
+			}
+
+			// Now insert the new record into the pageBuffer
+			pageBuffer[pageIndex] = 0x53;
+			pageIndex += 1;
+
+			memcpy(&pageBuffer[pageIndex], &receivedData, sizeof(measureData_t));
+			pageIndex += sizeof(measureData_t);
+
+			pageBuffer[pageIndex] = 0x45;
+			pageIndex += 1;
+		}
+	}
 }
 
-void wifiServerTask(void *arguments)
+static inline uint32_t AlignToNextPage(uint32_t addr) {
+    return ((addr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1));
+}
+
+void printData(measureData_t* data)
 {
-	uint8_t (*IP_Addr)[4] = (uint8_t (*)[4])arguments;
-	printf("Server is running and waiting for an HTTP  Client connection to %d.%d.%d.%d\n",IP_Addr[0],IP_Addr[1],IP_Addr[2],IP_Addr[3]);
+	printf("%f, %f, %f, %f, %f, %lu\r\n",
+	       data->acc,
+	       data->diffHeight,
+	       data->kalmanHeight,
+	       data->kalmanVertVel,
+	       data->kalmanVertAcc,
+	       data->time);
+}
+
+void readTask(void *arguments)
+{
+	printf("------Start read Task----\r\n");
+	const size_t RECORD_SIZE =  2 + sizeof(measureData_t);
+	uint8_t recordBuffer[RECORD_SIZE];
+	uint32_t currentReadAddress = START_ADDRESS;
+	uint8_t errorCode = BSP_QSPI_Init();
+	if(errorCode != QSPI_OK)
+	{
+		printf("Can't init QSPI: 0x%02x \r\n", errorCode);
+		return;
+	}
+	while(currentState != isReading)
+	{
+		vTaskDelay(pdMS_TO_TICKS(500));
+	}
+	measureData_t data;
+
+	// Keep reading until we find no valid record
+	while (1) {
+		// Read one record (26 bytes)
+		if (BSP_QSPI_Read(recordBuffer, currentReadAddress, RECORD_SIZE) != QSPI_OK) {
+			// Handle read error or break
+			printf("QSPI Read Error at address 0x%08X\n", (unsigned int)currentReadAddress);
+			break;
+		}
+		// Check start and end markers
+		if (recordBuffer[0] == 0x53 && recordBuffer[RECORD_SIZE - 1] == 0x45) {
+
+			memcpy(&data, recordBuffer+1, sizeof(measureData_t));
+			printData(&data);
+
+			// Move to next record
+			currentReadAddress += RECORD_SIZE;
+		}
+		else
+		{
+			//We only go to the next page, if we are not at the start from the page
+			uint32_t nextPageStart = AlignToNextPage(currentReadAddress);
+			if (nextPageStart == currentReadAddress) {
+				// Already at a page boundary, means no more valid data.
+				break;
+			}
+
+			// Move to next page start
+			currentReadAddress = nextPageStart;
+
+			// Try reading again at the start of next page
+			if (BSP_QSPI_Read(recordBuffer, currentReadAddress, RECORD_SIZE) != QSPI_OK) {
+				printf("QSPI Read Error at address 0x%08X\n", (unsigned int)currentReadAddress);
+				break;
+			}
+
+			if (recordBuffer[0] == 0x53 && recordBuffer[RECORD_SIZE - 1] == 0x45) {
+				// Valid record at next page boundary
+
+				memcpy(&data, recordBuffer+1, sizeof(measureData_t));
+				printData(&data);
+
+				currentReadAddress += RECORD_SIZE;
+			} else {
+				printf("Tried new block at 0x%08X which is %u but nothing found\r\n", (unsigned int)currentReadAddress, recordBuffer[0]);
+				// Still no valid record found. Assume no more records.
+				break;
+			}
+		}
+	}
+
+	printf("No more valid records found.\n");
 	vTaskDelete(NULL);
 }
-
-
+void startSaving()
+{
+	if(currentState != isWaiting)
+	{
+		printf("Can't set state!\r\n");
+		return;
+	}
+	printf("Start saving...\r\n");
+	currentState = isSaving;
+}
+void startReading()
+{
+	if(currentState != isWaiting)
+	{
+		printf("Can't set state!\r\n");
+		return;
+	}
+	printf("Start reading...\r\n");
+	currentState = isReading;
+}

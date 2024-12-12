@@ -25,9 +25,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "tasks.h"
-#include "WiFi/es_wifi_io.h"
-#include "WiFi/es_wifi.h"
-#include "WiFi/wifi.h"
+#include "WiFi/wifi_task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,14 +40,7 @@
 #define GETCHAR_PROTOTYPE int getc(FILE *f)
 #endif /* __GNUC__ */
 
-#define SSID     "YOUR_WIFI_SSID"
-#define PASSWORD "YOUR_WIFI_PASSWORD"
-#define PORT           80
 
-#define WIFI_WRITE_TIMEOUT 10000
-#define WIFI_READ_TIMEOUT  10000
-#define SOCKET                 0
-#define LOG(a) printf a
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -59,7 +50,6 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-static  uint8_t  IP_Addr[4];
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -96,8 +86,6 @@ void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
 void UART_IRQCallback(UART_HandleTypeDef *huart);
-static  int wifi_start(void);
-static  int wifi_connect(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -143,6 +131,7 @@ int main(void)
   MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
   printf("Hello world!!!!!!! \r\n");
+  /*----------Start WiFi and Server------------*/
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -163,27 +152,23 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  /*----------Start WiFi and Server------------*/
-  LOG(("\nRunning HTML Server test\n"));
-  if (wifi_connect()!=0)
-	  return -1;
-
-  if (WIFI_STATUS_OK!=WIFI_StartServer(SOCKET, WIFI_TCP_PROTOCOL, 1, "", PORT))
-  {
-    LOG(("ERROR: Cannot start server.\n"));
-  }
-
-  /*-------- start Tasks ----------*/
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  //osThreadDef(measureTask, measureTask, osPriorityNormal, 0, 512);
-  //osThreadCreate(osThread(measureTask), &hi2c2);
-  //osThreadDef(KalmanTask, presKalmanTask, osPriorityNormal, 0, 512);
-  //osThreadCreate(osThread(KalmanTask), &hi2c2);
   osThreadDef(wifiTask, wifiServerTask, osPriorityNormal, 0, 512);
-  osThreadCreate(osThread(wifiTask), IP_Addr);
+  osThreadCreate(osThread(wifiTask), NULL);
+  printf("Start Tasks\n");
+
+  osThreadDef(measureTask, measureTask, osPriorityNormal, 0, 512);
+  osThreadCreate(osThread(measureTask), &hi2c2);
+  osThreadDef(KalmanTask, presKalmanTask, osPriorityNormal, 0, 512);
+  osThreadCreate(osThread(KalmanTask), &hi2c2);
+  osThreadDef(flashSaveTask, saveTask, osPriorityNormal, 0, 512);
+  osThreadCreate(osThread(flashSaveTask), NULL);
+  osThreadDef(flashReadTask, readTask, osPriorityNormal, 0, 512);
+  osThreadCreate(osThread(flashReadTask), NULL);
+  printf("Memory aviable: %lu", (uint32_t)xPortGetFreeHeapSize());
   /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
@@ -404,7 +389,7 @@ static void MX_SPI3_Init(void)
   hspi3.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi3.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi3.Init.NSS = SPI_NSS_SOFT;
-  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -416,7 +401,8 @@ static void MX_SPI3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN SPI3_Init 2 */
-
+  HAL_NVIC_SetPriority((IRQn_Type)SPI3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ((IRQn_Type)SPI3_IRQn);
   /* USER CODE END SPI3_Init 2 */
 
 }
@@ -764,68 +750,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle) {
 
 }
 
-static int wifi_start(void)
-{
-  uint8_t  MAC_Addr[6];
-
- /*Initialize and use WIFI module */
-  if(WIFI_Init() ==  WIFI_STATUS_OK)
-  {
-    LOG(("ES-WIFI Initialized.\n"));
-    if(WIFI_GetMAC_Address(MAC_Addr, sizeof(MAC_Addr)) == WIFI_STATUS_OK)
-    {
-      LOG(("> eS-WiFi module MAC Address : %02X:%02X:%02X:%02X:%02X:%02X\n",
-               MAC_Addr[0],
-               MAC_Addr[1],
-               MAC_Addr[2],
-               MAC_Addr[3],
-               MAC_Addr[4],
-               MAC_Addr[5]));
-    }
-    else
-    {
-      LOG(("> ERROR : CANNOT get MAC address\n"));
-      return -1;
-    }
-  }
-  else
-  {
-    return -1;
-  }
-  return 0;
-}
-
-
-
-int wifi_connect(void)
-{
-
-  wifi_start();
-
-  /* Passwords must never be logged. */
-  if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
-  {
-    if(WIFI_GetIP_Address(IP_Addr, sizeof(IP_Addr)) == WIFI_STATUS_OK)
-    {
-      LOG(("> es-wifi module connected: got IP Address : %d.%d.%d.%d\n",
-               IP_Addr[0],
-               IP_Addr[1],
-               IP_Addr[2],
-               IP_Addr[3]));
-    }
-    else
-    {
-		  LOG((" ERROR : es-wifi module CANNOT get IP address\n"));
-      return -1;
-    }
-  }
-  else
-  {
-		 LOG(("ERROR : es-wifi module NOT connected\n"));
-     return -1;
-  }
-  return 0;
-}
 
 /**
   * @brief  EXTI line detection callback.

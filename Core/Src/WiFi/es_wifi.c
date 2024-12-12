@@ -1935,11 +1935,11 @@ ES_WIFI_Status_t ES_WIFI_StartServerSingleConn(ES_WIFIObject_t *Obj, ES_WIFI_Con
           {
             if(strstr((char *)Obj->CmdData, "Accepted"))
             {
-              ptr = strtok((char *)Obj->CmdData + 2, " ");
+              char* ptr = strtok((char *)Obj->CmdData + 2, " ");
               ptr = strtok(NULL, " ");
               ptr = strtok(NULL, " ");
               ptr = strtok(NULL, ":");
-              ParseIP((char *)ptr, conn->RemoteIP);
+              ParseIP((char *)ptr, conn->RemoteIP, sizeof(conn->RemoteIP));
               ret = ES_WIFI_STATUS_OK;
             }
           }

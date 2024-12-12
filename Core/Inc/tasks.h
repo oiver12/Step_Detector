@@ -8,6 +8,8 @@
 void measureTask(void *argument);
 void presKalmanTask(void *arguments);
 void saveTask(void *arguments);
-void wifiServerTask(void *arguments);
+void readTask(void *arguments);
+void startSaving();
+void startReading();
 
 #endif // MY_TASK_H
