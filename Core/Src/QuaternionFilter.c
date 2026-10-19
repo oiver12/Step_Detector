@@ -1,3 +1,7 @@
+/* Includes adapted Arduino orientation-filter code.
+ * Original library/version is no longer known; see THIRD_PARTY.md.
+ * The project MIT grant does not relicense these adapted portions.
+ */
 /*
  * QuaternionFilter.c
  *

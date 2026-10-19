@@ -1,3 +1,8 @@
+/* Numerical support adapted from sunsided/kalman-clib.
+ * Copyright (c) 2014-2015 Markus Mayer and contributors.
+ * MIT license: see LICENSES/kalman-clib-MIT.txt and THIRD_PARTY.md.
+ * Original EJML credits below are retained.
+ */
 #ifndef _MATRIX_H_
 #define _MATRIX_H_
 

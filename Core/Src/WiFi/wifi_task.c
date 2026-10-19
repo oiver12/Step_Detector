@@ -8,10 +8,13 @@
 #include "WiFi/es_wifi.h"
 #include "WiFi/wifi.h"
 
-#define SSID     "YOUR_WIFI_SSID"
-#define PASSWORD "YOUR_WIFI_PASSWORD"
-uint8_t RemoteIP[] = {192, 0, 2, 1};
-#define RemotePORT	8080
+#include "WiFi/wifi_config.local.h"
+#include "WiFi/wifi_task.h"
+#include "tasks.h"
+#include "task.h"
+
+uint8_t RemoteIP[] = STEP_WIFI_REMOTE_IP;
+#define RemotePORT STEP_WIFI_REMOTE_PORT
 
 #define WIFI_WRITE_TIMEOUT 10000
 #define WIFI_READ_TIMEOUT  10000
@@ -130,8 +133,8 @@ int wifi_connect(void)
 
   wifi_start();
 
-  LOG(("\nConnecting to %s\r\n",SSID));
-  if( WIFI_Connect(SSID, PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
+  LOG(("\nConnecting to %s\r\n",STEP_WIFI_SSID));
+  if( WIFI_Connect(STEP_WIFI_SSID, STEP_WIFI_PASSWORD, WIFI_ECN_WPA2_PSK) == WIFI_STATUS_OK)
   {
     if(WIFI_GetIP_Address(IP_Addr, sizeof(IP_Addr)) == WIFI_STATUS_OK)
     {

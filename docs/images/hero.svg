@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" role="img" aria-labelledby="title desc">
+  <title id="title">Step Detector</title>
+  <desc id="desc">STM32L475 sensor fusion. A solo ETH Zurich course project from autumn 2024. Decorative signal illustration, not measured data.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#0c182b"/><stop offset="1" stop-color="#132e3e"/></linearGradient>
+    <linearGradient id="line" x2="1"><stop stop-color="#5eead4"/><stop offset="1" stop-color="#7dd3fc"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#5eead4" stroke-opacity=".07"/></pattern>
+  </defs>
+  <rect width="1280" height="400" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="400" rx="24" fill="url(#grid)"/>
+  <path d="M56 54H100" stroke="#5eead4" stroke-width="4"/>
+  <text x="116" y="60" fill="#a7c9d4" font-family="Arial, sans-serif" font-size="14" font-weight="700" letter-spacing="3">EMBEDDED SYSTEMS / AUTUMN 2024</text>
+  <text x="56" y="152" fill="#f0fdfa" font-family="Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="-2">STEP</text>
+  <text x="56" y="228" fill="#f0fdfa" font-family="Arial, sans-serif" font-size="72" font-weight="700" letter-spacing="-2">DETECTOR</text>
+  <text x="59" y="273" fill="#b5cdd7" font-family="Arial, sans-serif" font-size="21">Motion. Orientation. State estimation.</text>
+  <rect x="58" y="314" width="112" height="32" rx="16" fill="#193d4a"/>
+  <text x="114" y="335" text-anchor="middle" fill="#99f6e4" font-family="Arial, sans-serif" font-size="13">STM32L475</text>
+  <rect x="182" y="314" width="104" height="32" rx="16" fill="#193d4a"/>
+  <text x="234" y="335" text-anchor="middle" fill="#99f6e4" font-family="Arial, sans-serif" font-size="13">FreeRTOS</text>
+  <text x="310" y="335" fill="#9bb8c5" font-family="Arial, sans-serif" font-size="14">ETH Zurich · Solo course project</text>
+  <rect x="706" y="78" width="514" height="252" rx="20" fill="#0b1c2b" stroke="#315463"/>
+  <circle cx="734" cy="103" r="4" fill="#5eead4"/>
+  <text x="749" y="108" fill="#a7c9d4" font-family="Arial, sans-serif" font-size="12" letter-spacing="2">SENSOR FUSION</text>
+  <path d="M731 235H1195M731 165H1195" stroke="#234050" stroke-dasharray="3 6"/>
+  <path d="M731 234L758 233L780 226L801 195L822 243L843 211L863 162L884 231L906 218L928 180L951 232L974 219L995 145L1016 233L1039 208L1060 167L1082 236L1104 205L1125 184L1148 232L1170 224L1195 230" fill="none" stroke="url(#line)" stroke-width="3" stroke-linejoin="round"/>
+  <text x="733" y="297" fill="#8aaab8" font-family="Arial, sans-serif" font-size="12">ACQUIRE</text>
+  <path d="M808 293H862M982 293H1036" stroke="#3d6777"/>
+  <text x="877" y="297" fill="#8aaab8" font-family="Arial, sans-serif" font-size="12">ESTIMATE</text>
+  <text x="1051" y="297" fill="#8aaab8" font-family="Arial, sans-serif" font-size="12">DETECT</text>
+  <text x="1218" y="355" text-anchor="end" fill="#648592" font-family="Arial, sans-serif" font-size="10" letter-spacing="1">SIGNAL ILLUSTRATION · NOT MEASURED DATA</text>
+</svg>

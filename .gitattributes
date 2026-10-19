@@ -1,0 +1,44 @@
+# STM32 HAL, CMSIS and FreeRTOS retain their original notices/licenses.
+Drivers/** linguist-vendored=true
+Middlewares/** linguist-vendored=true
+
+# ST component/BSP drivers stored alongside the application.
+Core/Inc/lsm6dsl_reg.h linguist-vendored=true
+Core/Src/lsm6dsl_reg.c linguist-vendored=true
+Core/Inc/lps22hb.h linguist-vendored=true
+Core/Src/lps22hb.c linguist-vendored=true
+Core/Inc/mx25r6435f.h linguist-vendored=true
+Core/Inc/stm32l475e_iot01_qspi.h linguist-vendored=true
+Core/Src/stm32l475e_iot01_qspi.c linguist-vendored=true
+Core/Inc/WiFi/es_wifi* linguist-vendored=true
+Core/Src/WiFi/es_wifi* linguist-vendored=true
+Core/Inc/WiFi/wifi.h linguist-vendored=true
+Core/Src/WiFi/wifi.c linguist-vendored=true
+
+# Copied/adapted numerical and orientation routines; provenance in THIRD_PARTY.md.
+Core/Inc/Kalman/matrix.h linguist-vendored=true
+Core/Src/Kalman/matrix.c linguist-vendored=true
+Core/Inc/Kalman/cholesky.h linguist-vendored=true
+Core/Src/Kalman/cholesky.c linguist-vendored=true
+Core/Inc/Kalman/compiler.h linguist-vendored=true
+Core/Inc/QuaternionFilter.h linguist-vendored=true
+Core/Src/QuaternionFilter.c linguist-vendored=true
+
+# CubeMX/CubeIDE scaffolding, including files with project USER CODE sections.
+Core/Startup/** linguist-vendored=true
+Core/Inc/FreeRTOSConfig.h linguist-vendored=true
+Core/Inc/main.h linguist-vendored=true
+Core/Inc/stm32l4xx* linguist-vendored=true
+Core/Src/main.c linguist-vendored=true
+Core/Src/freertos.c linguist-vendored=true
+Core/Src/stm32l4xx* linguist-vendored=true
+Core/Src/system_stm32l4xx.c linguist-vendored=true
+Core/Src/syscalls.c linguist-vendored=true
+Core/Src/sysmem.c linguist-vendored=true
+*.ld linguist-vendored=true
+*.ioc linguist-generated=true
+.project linguist-generated=true
+.cproject linguist-generated=true
+.mxproject linguist-generated=true
+
+# wifi_task.c remains application code despite living next to the Wi-Fi driver.
