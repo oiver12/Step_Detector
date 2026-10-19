@@ -209,21 +209,6 @@ I wrote the following application modules and the custom integration in `main.c`
 | [`Core/Src/main.c`](Core/Src/main.c), `USER CODE` sections only | Task creation, UART redirection and Wi-Fi interrupt integration within generated ST scaffolding |
 | [`Core/Inc/WiFi/wifi_config.example.h`](Core/Inc/WiFi/wifi_config.example.h) | Public configuration example added during publication preparation |
 
-### External code and generated scaffolding
-
-| Exact paths | Origin |
-| :--- | :--- |
-| `Core/Src/Kalman/matrix.c`, `Core/Inc/Kalman/matrix.h`, `Core/Src/Kalman/cholesky.c`, `Core/Inc/Kalman/cholesky.h`, `Core/Inc/Kalman/compiler.h` | Copied/adapted numerical support matching `sunsided/kalman-clib`; MIT and existing EJML credits retained |
-| `Core/Src/QuaternionFilter.c`, `Core/Inc/QuaternionFilter.h` | Contains adapted Arduino orientation-filter code, including Mahony/Madgwick routines; original library/version no longer known |
-| `Drivers/**` | STM32 HAL and ARM/CMSIS support |
-| `Middlewares/Third_Party/FreeRTOS/**` | FreeRTOS kernel, Cortex-M4F port, allocator and CMSIS-RTOS wrapper |
-| `Core/{Inc,Src}/lsm6dsl_reg.{h,c}`, `Core/{Inc,Src}/lps22hb.{h,c}` | ST sensor drivers, with project adaptations where present |
-| `Core/Inc/mx25r6435f.h`, `Core/Inc/stm32l475e_iot01_qspi.h`, `Core/Src/stm32l475e_iot01_qspi.c` | ST component/BSP support for external flash |
-| `Core/Inc/WiFi/es_wifi.h`, `es_wifi_io.h`, `es_wifi_conf.h`, `es_wifi_conf_template.h`, `wifi.h`; `Core/Src/WiFi/es_wifi.c`, `es_wifi_io.c`, `wifi.c` | ST/Inventek eS-WiFi driver, transport and wrapper |
-| `Core/Src/main.c` outside project additions; `freertos.c`, `stm32l4xx_hal_msp.c`, `stm32l4xx_hal_timebase_tim.c`, `stm32l4xx_it.c`, `system_stm32l4xx.c`, `syscalls.c`, `sysmem.c`; corresponding configuration headers, `Core/Startup/**`, `*.ld` | CubeMX/CubeIDE generated scaffolding |
-
-[`.gitattributes`](.gitattributes) excludes vendor/generated code from the project's language statistics. Original copyright headers and bundled licenses are preserved. See [`THIRD_PARTY.md`](THIRD_PARTY.md) for license scope and unresolved provenance.
-
 ## Course context & license
 
 Developed independently in autumn 2024 for the ETH Zurich P&S course **“Microcontrollers for Sensors and the Internet of Things.”** This is a personal course-project repository, not an official ETH distribution.
