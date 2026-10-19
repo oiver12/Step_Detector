@@ -1,6 +1,6 @@
 # Publication preparation
 
-The author authorized publishing the cleaned repository as a documented course-project snapshot. GitHub description/topics were set to match the project. Remaining implementation and provenance limitations are listed below and in the README.
+Published on 2026-10-19 as a documented course-project snapshot. The cleaned history was pushed and checked on GitHub before visibility was changed to public, at the author's request. GitHub description/topics match the project. Remaining implementation and provenance limitations are listed below and in the README.
 
 ## Changes made
 
@@ -71,7 +71,7 @@ Do not merge or fetch the old secret-bearing history back into this local public
 After checking the cleaned branch on GitHub, make the repository public explicitly:
 
 ```sh
-gh repo edit oiver12/Step_Detector --visibility public --accept-visibility-change-consequences
+gh api --method PATCH repos/oiver12/Step_Detector -F private=false
 ```
 
 Verify metadata afterwards:
@@ -80,4 +80,4 @@ Verify metadata afterwards:
 gh repo view oiver12/Step_Detector --json visibility,description,repositoryTopics
 ```
 
-Only `master` existed in the local ref inventory; no local tags or additional branches were available to rewrite. The scan covers the history present locally, not GitHub-only pull-request refs, forks or caches. Those need separate handling if they exist.
+Only `master` existed in the local ref inventory and in the pre-publication remote branch/tag check; no tags or additional branches needed rewriting. The scan covers the history present locally, not GitHub-only pull-request refs, forks or caches. Those need separate handling if they exist.
